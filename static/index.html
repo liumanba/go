@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聊天室</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { min-height: 100vh; background: #f5f5f5; display: flex; justify-content: center; align-items: center; padding: 20px; }
+    .chat-container { width: 100%; max-width: 720px; height: 90vh; max-height: 700px; background: #ffffff; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e0e0e0; position: relative; }
+    .chat-header { padding: 12px 24px; background: #fafafa; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; flex-shrink: 0; gap: 12px; flex-wrap: wrap; }
+    .chat-header h1 { font-size: 20px; font-weight: 600; color: #000; letter-spacing: -0.3px; margin-right: auto; }
+    .chat-header .badge { font-size: 13px; background: #eee; color: #333; padding: 4px 14px; border-radius: 20px; font-weight: 500; border: 1px solid #ccc; }
+    .user-status { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #000; }
+    .user-status .avatar-wrapper { position: relative; cursor: pointer; }
+    .user-status .avatar-wrapper img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #ccc; background: #fff; }
+    .user-status .avatar-wrapper .default-avatar { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: #ccc; color: #fff; font-weight: 600; font-size: 14px; border: 1px solid #ccc; }
+    .user-status .username { font-weight: 500; }
+    .user-status .auth-btn { background: none; border: 1px solid #ccc; border-radius: 20px; padding: 4px 14px; font-size: 13px; cursor: pointer; background: #fff; transition: background 0.15s; color: #000; }
+    .user-status .auth-btn:hover { background: #f0f0f0; }
+    .user-status .logout-btn { color: #d00; border-color: #d00; }
+    .user-status .logout-btn:hover { background: #fee; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
+    .modal-overlay.active { display: flex; }
+    .modal-box { background: #ffffff; border-radius: 20px; padding: 32px 28px; width: 100%; max-width: 400px; box-shadow: 0 12px 40px rgba(0,0,0,0.15); animation: fadeIn 0.25s ease; }
+    .modal-box h2 { font-size: 22px; font-weight: 600; margin-bottom: 20px; text-align: center; color: #000; }
+    .modal-box .form-group { margin-bottom: 16px; }
+    .modal-box .form-group label { display: block; font-size: 14px; font-weight: 500; color: #333; margin-bottom: 4px; }
+    .modal-box .form-group input { width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; outline: none; transition: border 0.2s; background: #fff; color: #000; }
+    .modal-box .form-group input:focus { border-color: #000; box-shadow: 0 0 0 3px rgba(0,0,0,0.1); }
+    .modal-box .btn-primary { width: 100%; padding: 12px; background: #000; border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: 4px; }
+    .modal-box .btn-primary:hover { background: #333; }
+    .modal-box .switch-mode { text-align: center; margin-top: 16px; font-size: 14px; color: #666; }
+    .modal-box .switch-mode a { color: #000; cursor: pointer; text-decoration: none; font-weight: 500; }
+    .modal-box .switch-mode a:hover { text-decoration: underline; }
+    .modal-box .close-modal { float: right; background: none; border: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1; }
+    .modal-box .close-modal:hover { color: #000; }
+    .modal-box .error-msg { color: #d00; font-size: 14px; margin-top: 8px; text-align: center; }
+    .message-area { flex: 1; padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: #ffffff; }
+    .message-area::-webkit-scrollbar { width: 6px; }
+    .message-area::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 8px; }
+    .message-area::-webkit-scrollbar-thumb { background: #ccc; border-radius: 8px; }
+    .message-item { display: flex; gap: 12px; align-items: flex-start; padding: 8px 16px 8px 8px; background: #fafafa; border-radius: 12px; border: 1px solid #eee; animation: fadeIn 0.2s ease; }
+    .message-item .avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; object-fit: cover; background: #eee; border: 1px solid #ddd; }
+    .message-item .avatar-placeholder { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #ccc; color: #fff; font-weight: 600; font-size: 14px; flex-shrink: 0; border: 1px solid #ddd; }
+    .message-item .message-body { flex: 1; min-width: 0; }
+    .message-item .meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+    .message-item .time { font-size: 12px; color: #666; font-weight: 500; }
+    .message-item .name { font-weight: 600; color: #000; }
+    .message-item .name::after { content: '：'; font-weight: 400; color: #999; }
+    .message-item .content { color: #000; line-height: 1.5; word-break: break-word; }
+    .message-item .image-container { margin-top: 4px; max-width: 100%; }
+    .message-item .image-container img { max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #ddd; object-fit: contain; display: block; }
+    .empty-hint { color: #999; text-align: center; padding: 40px 0; font-size: 15px; }
+    .input-area { padding: 12px 24px 20px; background: #fafafa; border-top: 1px solid #e0e0e0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex-shrink: 0; }
+    .input-area .msg-input { flex: 1; min-width: 180px; padding: 10px 16px; border: 1px solid #ccc; border-radius: 40px; font-size: 15px; background: #ffffff; transition: border 0.2s, box-shadow 0.2s; outline: none; color: #000; }
+    .input-area .msg-input:focus { border-color: #000; box-shadow: 0 0 0 3px rgba(0,0,0,0.1); }
+    .input-area .file-actions { display: flex; align-items: center; gap: 8px; }
+    .input-area .file-actions .image-preview { display: inline-flex; align-items: center; gap: 6px; background: #eee; border-radius: 20px; padding: 4px 10px 4px 6px; border: 1px solid #ccc; font-size: 13px; color: #000; }
+    .input-area .file-actions .image-preview img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; border: 1px solid #ccc; }
+    .input-area .file-actions .image-preview .remove-img { cursor: pointer; color: #999; font-weight: 600; padding: 0 4px; font-size: 16px; line-height: 1; }
+    .input-area .file-actions .image-preview .remove-img:hover { color: #d00; }
+    .input-area .file-btn { background: none; border: 1px solid #ccc; border-radius: 40px; padding: 8px 14px; font-size: 15px; cursor: pointer; background: #fff; color: #000; transition: background 0.15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+    .input-area .file-btn:hover { background: #f0f0f0; }
+    .input-area .send-btn { padding: 10px 28px; background: #000; border: none; border-radius: 40px; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s, transform 0.1s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); letter-spacing: 0.3px; white-space: nowrap; }
+    .input-area .send-btn:hover { background: #333; }
+    .input-area .send-btn:active { transform: scale(0.97); }
+    #fileInput, #avatarInput { display: none; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 480px) { .chat-container { height: 95vh; max-height: none; border-radius: 12px; } .input-area { flex-direction: column; align-items: stretch; } .input-area .msg-input { flex: 1; } .input-area .file-actions { justify-content: space-between; } .input-area .send-btn { width: 100%; } .chat-header { flex-direction: column; align-items: stretch; gap: 6px; } .user-status { justify-content: flex-end; } }
+  </style>
+</head>
+<body>
+<div class="chat-container">
+  <div class="chat-header">
+    <h1> 聊天室</h1>
+    <span class="badge">go开发</span>
+    <div class="user-status" id="userStatus">
+      <span class="avatar-wrapper" id="avatarWrapper" style="display:none;">
+        <img id="headerAvatar" src="" alt="头像" title="点击更换头像">
+        <input type="file" id="avatarInput" accept="image/*">
+      </span>
+      <span class="username" id="displayUsername">未登录</span>
+      <button class="auth-btn" id="loginBtn">登录</button>
+      <button class="auth-btn" id="registerBtn">注册</button>
+      <button class="auth-btn logout-btn" id="logoutBtn" style="display:none;">退出</button>
+    </div>
+  </div>
+  <div class="message-area" id="messageBox">
+    <div class="empty-hint">还没有消息，快来聊吧</div>
+  </div>
+  <div class="input-area">
+    <input class="msg-input" type="text" id="msgInput" placeholder="输入消息…" autofocus>
+    <div class="file-actions">
+      <button class="file-btn" id="fileBtn"> 图片</button>
+      <input type="file" id="fileInput" accept="image/*">
+      <span id="imagePreview" class="image-preview" style="display:none;">
+        <img id="previewImg" src="" alt="预览">
+        <span class="remove-img" id="removeImgBtn">✕</span>
+      </span>
+    </div>
+    <button class="send-btn" id="sendBtn">发送</button>
+  </div>
+</div>
+
+<!-- 登录/注册模态框 -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal-box">
+    <button class="close-modal" id="closeModalBtn">&times;</button>
+    <h2 id="modalTitle">登录</h2>
+    <div class="form-group">
+      <label for="authUsername">用户名</label>
+      <input type="text" id="authUsername" placeholder="请输入用户名">
+    </div>
+    <div class="form-group">
+      <label for="authPassword">密码</label>
+      <input type="password" id="authPassword" placeholder="请输入密码">
+    </div>
+    <button class="btn-primary" id="authSubmitBtn">登录</button>
+    <div class="error-msg" id="authError"></div>
+    <div class="switch-mode">
+      <span id="switchText">还没有账号？</span>
+      <a id="switchModeBtn">注册</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ---------- DOM 引用 ----------
+  const messageBox = document.getElementById('messageBox');
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const fileBtn = document.getElementById('fileBtn');
+  const fileInput = document.getElementById('fileInput');
+  const imagePreview = document.getElementById('imagePreview');
+  const previewImg = document.getElementById('previewImg');
+  const removeImgBtn = document.getElementById('removeImgBtn');
+  const loginBtn = document.getElementById('loginBtn');
+  const registerBtn = document.getElementById('registerBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const displayUsername = document.getElementById('displayUsername');
+  const headerAvatar = document.getElementById('headerAvatar');
+  const avatarWrapper = document.getElementById('avatarWrapper');
+  const avatarInput = document.getElementById('avatarInput');
+
+  const modal = document.getElementById('authModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const authUsername = document.getElementById('authUsername');
+  const authPassword = document.getElementById('authPassword');
+  const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const authError = document.getElementById('authError');
+  const switchModeBtn = document.getElementById('switchModeBtn');
+  const switchText = document.getElementById('switchText');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+
+  let uploadedImageURL = '';
+  let cachedMessages = [];
+  let currentMode = 'login';
+  let token = localStorage.getItem('chatToken') || '';
+  let username = localStorage.getItem('chatUsername') || '';
+  let userAvatar = localStorage.getItem('chatAvatar') || '';
+
+  // ---------- 滚动位置相关 ----------
+  let isRestoringScroll = false;
+  let scrollSaveTimer = null;
+  const SCROLL_SAVE_DELAY = 500;
+
+  // ---------- 工具函数 ----------
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function removeEmptyHint() {
+    const hint = messageBox.querySelector('.empty-hint');
+    if (hint) hint.remove();
+  }
+
+  function getInitialAvatar(name) {
+    if (!name) return '?';
+    return name.charAt(0).toUpperCase();
+  }
+
+  function buildMessageHTML(msg) {
+    const name = escapeHtml(msg.name || '匿名');
+    const content = escapeHtml(msg.content || '');
+    const time = escapeHtml(msg.time || '');
+    const image = msg.image || '';
+    const avatar = msg.avatar || '';
+    let avatarHtml = '';
+    if (avatar) {
+      avatarHtml = `<img class="avatar" src="${escapeHtml(avatar)}" alt="头像" loading="lazy">`;
+    } else {
+      const initial = getInitialAvatar(msg.name);
+      avatarHtml = `<div class="avatar-placeholder">${escapeHtml(initial)}</div>`;
+    }
+    let html = `<div class="message-item">
+      ${avatarHtml}
+      <div class="message-body">
+        <div class="meta">
+          <span class="time">${time}</span>
+          <span class="name">${name}</span>
+        </div>
+        <div class="content">${content}</div>`;
+    if (image) {
+      html += `<div class="image-container"><img src="${escapeHtml(image)}" alt="图片" loading="lazy"></div>`;
+    }
+    html += `</div></div>`;
+    return html;
+  }
+
+  function renderAllMessages(list) {
+    if (!list || list.length === 0) {
+      messageBox.innerHTML = '<div class="empty-hint">还没有消息，快来聊吧</div>';
+      return;
+    }
+    let html = '';
+    list.forEach(item => {
+      html += buildMessageHTML(item);
+    });
+    messageBox.innerHTML = html;
+  }
+
+  function appendMessageElement(msg) {
+    removeEmptyHint();
+    const html = buildMessageHTML(msg);
+    messageBox.insertAdjacentHTML('beforeend', html);
+  }
+
+  // ---------- 滚动位置 ----------
+  function saveScrollPosition(scrollTop) {
+    localStorage.setItem('chatScrollTop', String(scrollTop));
+    if (token && username) {
+      fetch('/scroll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ scrollTop })
+      }).catch(err => console.warn('同步滚动位置失败:', err));
+    }
+  }
+
+  function fetchScrollPositionFromServer() {
+    if (!token || !username) return Promise.resolve(null);
+    return fetch('/scroll', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+      .then(res => res.json())
+      .then(data => data.scrollTop !== undefined ? data.scrollTop : null)
+      .catch(() => null);
+  }
+
+  function restoreScrollPosition() {
+    isRestoringScroll = true;
+    const localScroll = parseInt(localStorage.getItem('chatScrollTop'), 10) || 0;
+    if (token && username) {
+      fetchScrollPositionFromServer().then(serverPos => {
+        if (serverPos !== null && serverPos > 0) {
+          messageBox.scrollTop = serverPos;
+        } else if (localScroll > 0) {
+          messageBox.scrollTop = localScroll;
+        }
+        isRestoringScroll = false;
+      });
+    } else {
+      if (localScroll > 0) messageBox.scrollTop = localScroll;
+      isRestoringScroll = false;
+    }
+  }
+
+  // ---------- 消息加载 ----------
+  function loadMessages() {
+    fetch('/message')
+      .then(res => res.json())
+      .then(data => {
+        const newList = data.data || [];
+        const oldLen = cachedMessages.length;
+        const newLen = newList.length;
+        if (oldLen === 0) {
+          cachedMessages = newList;
+          renderAllMessages(newList);
+          restoreScrollPosition();
+          return;
+        }
+        if (newLen > oldLen) {
+          const added = newList.slice(oldLen);
+          added.forEach(msg => appendMessageElement(msg));
+          cachedMessages = newList;
+        } else if (newLen < oldLen) {
+          cachedMessages = newList;
+          renderAllMessages(newList);
+          restoreScrollPosition();
+        }
+      })
+      .catch(err => console.warn('加载消息失败:', err));
+  }
+
+  // ---------- 图片上传 ----------
+  function uploadImage(file) {
+    const formData = new FormData();
+    formData.append('image', file);
+    fetch('/upload', {
+      method: 'POST',
+      body: formData
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.url) {
+          uploadedImageURL = data.url;
+          previewImg.src = data.url;
+          imagePreview.style.display = 'inline-flex';
+          fileInput.value = '';
+        } else {
+          alert(data.msg || '图片上传失败');
+        }
+      })
+      .catch(err => {
+        console.error('上传错误:', err);
+        alert('网络错误，请检查服务器');
+      });
+  }
+
+  // ---------- 发送消息 ----------
+  function sendMessage() {
+    if (!token || !username) {
+      alert('请先登录再发送消息');
+      return;
+    }
+    const content = msgInput.value.trim();
+    if (!content && !uploadedImageURL) {
+      msgInput.focus();
+      return;
+    }
+    const payload = { content };
+    if (uploadedImageURL) payload.image = uploadedImageURL;
+
+    fetch('/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(async res => {
+        if (res.status === 401) {
+          // 未授权，清除登录状态
+          logout();
+          throw new Error('登录已过期，请重新登录');
+        }
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.msg || '发送失败');
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data.msg === '发送成功') {
+          msgInput.value = '';
+          uploadedImageURL = '';
+          imagePreview.style.display = 'none';
+          previewImg.src = '';
+          msgInput.focus();
+          loadMessages();
+        } else {
+          alert(data.msg || '发送失败，请重试');
+        }
+      })
+      .catch(err => {
+        console.error('发送错误:', err);
+        alert(err.message || '网络错误，请检查服务器');
+      });
+  }
+
+  // ---------- 用户认证 ----------
+  function updateUI() {
+    if (token && username) {
+      displayUsername.textContent = username;
+      loginBtn.style.display = 'none';
+      registerBtn.style.display = 'none';
+      logoutBtn.style.display = 'inline-block';
+      avatarWrapper.style.display = 'inline-block';
+      if (userAvatar) {
+        headerAvatar.src = userAvatar;
+      } else {
+        // 显示首字母占位
+        headerAvatar.src = ''; // 清空，靠下面的占位显示，但img没有占位，我们用css或data:image
+        // 改为生成一个带首字母的SVG作为默认头像
+        const initial = username.charAt(0).toUpperCase();
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32">
+          <rect width="100" height="100" rx="50" fill="#ccc"/>
+          <text x="50" y="60" font-size="40" text-anchor="middle" fill="#fff" font-family="Arial">${initial}</text>
+        </svg>`;
+        headerAvatar.src = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+      }
+    } else {
+      displayUsername.textContent = '未登录';
+      loginBtn.style.display = 'inline-block';
+      registerBtn.style.display = 'inline-block';
+      logoutBtn.style.display = 'none';
+      avatarWrapper.style.display = 'none';
+    }
+  }
+
+  // 获取用户信息（头像）
+  function fetchUserProfile() {
+    if (!token || !username) return Promise.resolve();
+    return fetch('/profile', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+      .then(res => {
+        if (res.status === 401) {
+          logout();
+          return null;
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data && data.avatar) {
+          userAvatar = data.avatar;
+          localStorage.setItem('chatAvatar', userAvatar);
+        } else {
+          userAvatar = '';
+          localStorage.removeItem('chatAvatar');
+        }
+        updateUI();
+      })
+      .catch(err => console.warn('获取用户信息失败:', err));
+  }
+
+  function setAuthMode(mode) {
+    currentMode = mode;
+    if (mode === 'login') {
+      modalTitle.textContent = '登录';
+      authSubmitBtn.textContent = '登录';
+      switchText.textContent = '还没有账号？';
+      switchModeBtn.textContent = '注册';
+    } else {
+      modalTitle.textContent = '注册';
+      authSubmitBtn.textContent = '注册';
+      switchText.textContent = '已有账号？';
+      switchModeBtn.textContent = '登录';
+    }
+    authError.textContent = '';
+    authUsername.value = '';
+    authPassword.value = '';
+  }
+
+  function openModal(mode) {
+    setAuthMode(mode);
+    modal.classList.add('active');
+    authUsername.focus();
+  }
+
+  function closeModal() {
+    modal.classList.remove('active');
+  }
+
+  function handleAuthSubmit() {
+    const usernameVal = authUsername.value.trim();
+    const passwordVal = authPassword.value.trim();
+    if (!usernameVal || !passwordVal) {
+      authError.textContent = '请填写完整信息';
+      return;
+    }
+    const endpoint = currentMode === 'login' ? '/login' : '/register';
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: usernameVal, password: passwordVal })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.msg === '注册成功') {
+          authError.textContent = '注册成功，请登录';
+          setAuthMode('login');
+          return;
+        }
+        if (data.token) {
+          token = data.token;
+          username = data.username;
+          userAvatar = data.avatar || '';
+          localStorage.setItem('chatToken', token);
+          localStorage.setItem('chatUsername', username);
+          if (userAvatar) {
+            localStorage.setItem('chatAvatar', userAvatar);
+          } else {
+            localStorage.removeItem('chatAvatar');
+          }
+          updateUI();
+          closeModal();
+          loadMessages();
+          // 后台获取最新头像（以防万一）
+          fetchUserProfile();
+        } else {
+          authError.textContent = data.msg || '操作失败';
+        }
+      })
+      .catch(err => {
+        console.error('认证错误:', err);
+        authError.textContent = '网络错误，请重试';
+      });
+  }
+
+  function logout() {
+    token = '';
+    username = '';
+    userAvatar = '';
+    localStorage.removeItem('chatToken');
+    localStorage.removeItem('chatUsername');
+    localStorage.removeItem('chatAvatar');
+    updateUI();
+    loadMessages();
+  }
+
+  // ---------- 头像上传 ----------
+  function uploadAvatar(file) {
+    if (!token) {
+      alert('请先登录');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('avatar', file);
+    fetch('/avatar', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: formData
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.avatar) {
+          userAvatar = data.avatar;
+          localStorage.setItem('chatAvatar', userAvatar);
+          headerAvatar.src = userAvatar;
+          alert('头像更新成功');
+        } else {
+          alert(data.msg || '头像上传失败');
+        }
+      })
+      .catch(err => {
+        console.error('头像上传错误:', err);
+        alert('网络错误，请重试');
+      });
+    avatarInput.value = '';
+  }
+
+  // ---------- 滚动事件 ----------
+  messageBox.addEventListener('scroll', function() {
+    if (isRestoringScroll) return;
+    if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+    scrollSaveTimer = setTimeout(() => {
+      const scrollTop = messageBox.scrollTop;
+      if (scrollTop >= 0) saveScrollPosition(scrollTop);
+      scrollSaveTimer = null;
+    }, SCROLL_SAVE_DELAY);
+  });
+
+  // ---------- 事件绑定 ----------
+  sendBtn.addEventListener('click', sendMessage);
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  fileBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        alert('请选择图片文件');
+        fileInput.value = '';
+        return;
+      }
+      uploadImage(file);
+    }
+  });
+
+  removeImgBtn.addEventListener('click', () => {
+    uploadedImageURL = '';
+    imagePreview.style.display = 'none';
+    previewImg.src = '';
+    fileInput.value = '';
+  });
+
+  // 头像点击上传
+  headerAvatar.addEventListener('click', () => {
+    if (!token) {
+      alert('请先登录');
+      return;
+    }
+    avatarInput.click();
+  });
+  avatarInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        alert('请选择图片文件');
+        avatarInput.value = '';
+        return;
+      }
+      uploadAvatar(file);
+    }
+  });
+
+  loginBtn.addEventListener('click', () => openModal('login'));
+  registerBtn.addEventListener('click', () => openModal('register'));
+  logoutBtn.addEventListener('click', logout);
+
+  closeModalBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+  switchModeBtn.addEventListener('click', () => {
+    const newMode = currentMode === 'login' ? 'register' : 'login';
+    setAuthMode(newMode);
+  });
+  authSubmitBtn.addEventListener('click', handleAuthSubmit);
+  authUsername.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') authPassword.focus();
+  });
+  authPassword.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleAuthSubmit();
+  });
+
+  // ---------- 启动 ----------
+  // 如果本地有token，先显示缓存头像，再请求最新
+  if (token && username) {
+    updateUI(); // 显示用户名和缓存头像
+    fetchUserProfile().then(() => {
+      loadMessages();
+    });
+  } else {
+    loadMessages();
+  }
+  setInterval(loadMessages, 1200);
+
+  // 全局处理未授权错误（如fetch返回401）
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    return originalFetch.apply(this, args).then(response => {
+      if (response.status === 401) {
+        // 如果当前有token且未登出，执行登出
+        if (token) {
+          logout();
+          alert('登录已过期，请重新登录');
+        }
+      }
+      return response;
+    });
+  };
+})();
+</script>
+</body>
+</html>
